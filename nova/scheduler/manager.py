@@ -705,7 +705,9 @@ class SchedulerManager(manager.Manager):
         scheduling constraints for the request spec object and have been sorted
         according to the weighers.
         """
-        core_usages = requests.get(url='http://100.64.42.11:4000/gc/core-usage').json()
+        # todo following url needs to be read from the configuration file.
+        # gc-emulation service tracks green core usage across nodes.
+        core_usages = requests.get(url='http://{GC_EMULATION_SERVICE_HOST}:{GC_EMULATION_SERVICE_PORT}/gc/core-usage').json()
         global CORE_USAGE
         CORE_USAGE['core_usage'] = core_usages
         filtered_hosts = self.host_manager.get_filtered_hosts(host_states,

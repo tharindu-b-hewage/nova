@@ -57,7 +57,7 @@ class ComputeFilter(filters.BaseHostFilter):
         rcpus_free = rcpus_avl - rcpus_usg
 
         hints = spec_obj.scheduler_hints
-        type = hints['type'][0]
+        type = hints['type'][0] if 'type' in hints else 'evictable'
         if type == 'regular' and rcpus_free < spec_obj.vcpus:
             return False
 

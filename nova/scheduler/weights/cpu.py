@@ -150,7 +150,7 @@ class CPUWeigher(weights.BaseHostWeigher):
         used_cores = rcpus_used + gcpus_used
 
         hints = weight_properties.scheduler_hints
-        vm_type = hints['type'][0]
+        vm_type = hints['type'][0] if 'type' in hints else 'evictable'
 
         vm_cpus = weight_properties.vcpus
 

@@ -17,7 +17,6 @@ from oslo_log import log as logging
 
 from nova.scheduler import filters
 from nova import servicegroup
-from ..manager import CORE_USAGE
 
 LOG = logging.getLogger(__name__)
 
@@ -35,7 +34,6 @@ class ComputeFilter(filters.BaseHostFilter):
 
     def host_passes(self, host_state, spec_obj):
         """Returns True for only active compute nodes."""
-
         service = host_state.service
         if service['disabled']:
             LOG.debug("%(host_state)s is disabled, reason: %(reason)s",
@@ -47,18 +45,4 @@ class ComputeFilter(filters.BaseHostFilter):
                 LOG.warning("%(host_state)s has not been heard from in a "
                             "while", {'host_state': host_state})
                 return False
-
-        host_ip = host_state.host_ip
-        core_usage = list(filter(lambda x: x['host-ip'] == str(host_ip), CORE_USAGE['core_usage']))
-        core_usage = core_usage[0]
-
-        rcpus_avl = core_usage['reg-cores-avl']
-        rcpus_usg = core_usage['reg-cores-usg']
-        rcpus_free = rcpus_avl - rcpus_usg
-
-        hints = spec_obj.scheduler_hints
-        type = hints['type'][0] if 'type' in hints else 'evictable'
-        if type == 'regular' and rcpus_free < spec_obj.vcpus:
-            return False
-
         return True

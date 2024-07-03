@@ -759,6 +759,7 @@ def _pack_instance_onto_cores(host_cell, instance_cell,
         cpu_stable_set = get_cpu_stable_set()
         usable_cores_list = list(itertools.chain(*usable_cores))
         if len(cpu_stable_set) > 1:
+            usable_cores_list = sorted(usable_cores_list)
             usable_cores_list = sorted(usable_cores_list, key=lambda x: get_priority_weight(x, cpu_stable_set))
             msg = ("Using priority core pinning: high priority cores: "
                    "%(cpu_stable_set)s, priority ordered host cores: %(usable_cores_list)s")

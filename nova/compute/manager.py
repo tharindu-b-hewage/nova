@@ -4205,8 +4205,7 @@ class ComputeManager(manager.Manager):
         nova_attachments = []
         bdms_to_delete = []
         for bdm in bdms.objects:
-            if bdm.volume_id and bdm.source_type == 'volume' and \
-                bdm.destination_type == 'volume':
+            if bdm.volume_id and bdm.attachment_id:
                 try:
                     self.volume_api.attachment_get(context, bdm.attachment_id)
                 except exception.VolumeAttachmentNotFound:
@@ -7012,9 +7011,9 @@ class ComputeManager(manager.Manager):
 
         instance.power_state = current_power_state
         # NOTE(mriedem): The vm_state has to be set before updating the
-        # resource tracker, see vm_states.ALLOW_RESOURCE_REMOVAL. The host/node
-        # values cannot be nulled out until after updating the resource tracker
-        # though.
+        # resource tracker, see vm_states.allow_resource_removal(). The
+        # host/node values cannot be nulled out until after updating the
+        # resource tracker though.
         instance.vm_state = vm_states.SHELVED_OFFLOADED
         instance.task_state = None
         instance.save(expected_task_state=[task_states.SHELVING,
@@ -9189,12 +9188,16 @@ class ComputeManager(manager.Manager):
                                    objects.LibvirtVPMEMDevice)):
                         has_vpmem = True
                         break
+            power_management_possible = (
+                'dst_numa_info' in migrate_data and
+                migrate_data.dst_numa_info is not None)
             # No instance booting at source host, but instance dir
             # must be deleted for preparing next block migration
             # must be deleted for preparing next live migration w/o shared
             # storage
             # vpmem must be cleaned
-            do_cleanup = not migrate_data.is_shared_instance_path or has_vpmem
+            do_cleanup = (not migrate_data.is_shared_instance_path or
+                          has_vpmem or power_management_possible)
             destroy_disks = not migrate_data.is_shared_block_storage
         elif isinstance(migrate_data, migrate_data_obj.HyperVLiveMigrateData):
             # NOTE(claudiub): We need to cleanup any zombie Planned VM.

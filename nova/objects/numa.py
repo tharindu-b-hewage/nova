@@ -98,6 +98,14 @@ class NUMACell(base.NovaObject):
         self.pinned_cpus |= cpus
 
     def unpin_cpus(self, cpus):
+        # if the core is offline, below check can fail, although there are cpus that are not a part of available cpus.
+        # For openstack-gc, we disable this check, assuming its a core that went to sleep. When prepping for production,
+        # an additional check to verify that state (call external endpoint to see if the cpu is actually green and went
+        # asleep) can be included.
+        if (cpus - self.pcpuset) and ((self.pinned_cpus & cpus) != cpus):
+            self.pinned_cpus -= cpus
+            return
+
         if cpus - self.pcpuset:
             raise exception.CPUUnpinningUnknown(requested=list(cpus),
                                                 available=list(self.pcpuset))

@@ -23,6 +23,7 @@ import collections
 import copy
 import random
 
+import requests
 from keystoneauth1 import exceptions as ks_exc
 from oslo_log import log as logging
 import oslo_messaging as messaging
@@ -51,6 +52,8 @@ LOG = logging.getLogger(__name__)
 QUOTAS = quota.QUOTAS
 
 HOST_MAPPING_EXISTS_WARNING = False
+
+CORE_USAGE = {}
 
 
 class SchedulerManager(manager.Manager):
@@ -702,6 +705,11 @@ class SchedulerManager(manager.Manager):
         scheduling constraints for the request spec object and have been sorted
         according to the weighers.
         """
+        # todo following url needs to be read from the configuration file.
+        # gc-emulation service tracks green core usage across nodes.
+        core_usages = requests.get(url='http://{GC_EMULATION_SERVICE_HOST}:{GC_EMULATION_SERVICE_PORT}/gc/core-usage').json()
+        global CORE_USAGE
+        CORE_USAGE['core_usage'] = core_usages
         filtered_hosts = self.host_manager.get_filtered_hosts(host_states,
             spec_obj, index)
 

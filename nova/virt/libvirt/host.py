@@ -38,6 +38,7 @@ import queue
 import socket
 import threading
 import typing as ty
+import requests as rq
 
 from eventlet import greenio
 from eventlet import greenthread
@@ -60,7 +61,7 @@ from nova.objects import fields
 from nova.pci import utils as pci_utils
 from nova import rpc
 from nova import utils
-from nova.virt import event as virtevent
+from nova.virt import event as virtevent, hardware
 from nova.virt.libvirt import config as vconfig
 from nova.virt.libvirt import event as libvirtevent
 from nova.virt.libvirt import guest as libvirt_guest
@@ -760,7 +761,29 @@ class Host(object):
             if cpu_map[cpu]:
                 online_cpus.add(cpu)
 
-        return online_cpus
+        asleep_cpus = self._get_sleeping_cpus()
+        os_online_cpus = online_cpus - asleep_cpus
+        if len(asleep_cpus) > 0:
+            LOG.info('Asleep cpus detected. %(libvirsh_online_cpus)s:%(asleep_cpus)s for '
+                     'os_online %(os_online_cpus)s',
+                     {'libvirsh_online_cpus': online_cpus, 'asleep_cpus': asleep_cpus,
+                      'os_online_cpus': os_online_cpus})
+
+        return os_online_cpus
+
+    def _get_sleeping_cpus(self):
+        """Get the ids of the cores that are sleeping.
+
+        :returns: list of ids that are asleep.
+        """
+        endpoint = CONF.compute.cpu_sleep_info_endpoint
+        r = rq.get(url=endpoint)
+        data = r.json()
+        is_awake = data['is-awake']
+        sleeping_cpus = set()
+        if not is_awake:
+            sleeping_cpus = set(hardware.get_cpu_dynamic_set())
+        return sleeping_cpus
 
     def get_cpu_model_names(self):
         """Get the cpu models based on host CPU arch

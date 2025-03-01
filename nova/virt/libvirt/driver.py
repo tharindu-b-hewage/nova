@@ -734,12 +734,31 @@ class LibvirtDriver(driver.ComputeDriver):
                  {'enabled': enabled, 'reason': reason})
         self._set_host_enabled(enabled, reason)
 
+    def _init_host_topology(self):
+        """To work around a bug in libvirt that reports offline CPUs as always
+        being on socket 0 regardless of their real socket, power up all
+        dedicated CPUs (the only ones whose socket we actually care about),
+        then call get_capabilities() to initialize the topology with the
+        correct socket values. get_capabilities()'s implementation will reuse
+        these initial socket value, and avoid clobbering them with 0 for
+        offline CPUs.
+        """
+        cpus = hardware.get_cpu_dedicated_set()
+        if cpus:
+            self.cpu_api.power_up(cpus)
+            self._host.get_capabilities()
+
     def init_host(self, host):
         self._host.initialize()
 
-        self._update_host_specific_capabilities()
-
+        # NOTE(artom) Do this first to make sure our first call to
+        # get_capabilities() happens with all dedicated CPUs online and caches
+        # their correct socket ID. Unused dedicated CPUs will be powered down
+        # further down in this method.
         self._check_cpu_set_configuration()
+        self._init_host_topology()
+
+        self._update_host_specific_capabilities()
 
         self._do_quality_warnings()
 
@@ -1623,12 +1642,12 @@ class LibvirtDriver(driver.ComputeDriver):
             cleanup_instance_dir = True
             cleanup_instance_disks = True
         else:
-            # NOTE(mdbooth): I think the theory here was that if this is a
-            # migration with shared block storage then we need to delete the
-            # instance directory because that's not shared. I'm pretty sure
-            # this is wrong.
+            # NOTE(mheler): For shared block storage we only need to clean up
+            # the instance directory when it's not on a shared path.
             if migrate_data and 'is_shared_block_storage' in migrate_data:
-                cleanup_instance_dir = migrate_data.is_shared_block_storage
+                cleanup_instance_dir = (
+                        migrate_data.is_shared_block_storage and
+                        not migrate_data.is_shared_instance_path)
 
             # NOTE(lyarwood): The following workaround allows operators to
             # ensure that non-shared instance directories are removed after an
@@ -2995,11 +3014,7 @@ class LibvirtDriver(driver.ComputeDriver):
         if instance.os_type:
             metadata['properties']['os_type'] = instance.os_type
 
-        # NOTE(vish): glance forces ami disk format to be ami
-        if image_meta.disk_format == 'ami':
-            metadata['disk_format'] = 'ami'
-        else:
-            metadata['disk_format'] = img_fmt
+        metadata['disk_format'] = img_fmt
 
         if image_meta.obj_attr_is_set("container_format"):
             metadata['container_format'] = image_meta.container_format

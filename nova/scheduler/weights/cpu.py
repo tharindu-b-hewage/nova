@@ -78,7 +78,7 @@ class CPUWeigher(weights.BaseHostWeigher):
         gcpus_used = core_usage['green-cores-usg']
         p_host = {
             'deficit': abs(rcpus_avl - rcpus_used) / rcpus_avl,
-            'promise': abs(gcpus_avl - gcpus_used) / gcpus_avl
+            'promise': abs(gcpus_avl - gcpus_used) / gcpus_avl if gcpus_avl != 0 else 0
         }
         LOG.info('[OpenStack-GC] node: %(host_ip)s | node_coordinates: %(p_host)s', {'host_ip': host_ip, 'p_host': p_host})
 

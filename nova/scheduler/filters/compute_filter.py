@@ -17,6 +17,7 @@ from oslo_log import log as logging
 
 from nova.scheduler import filters
 from nova import servicegroup
+from ..manager import CORE_USAGE
 
 LOG = logging.getLogger(__name__)
 
@@ -45,4 +46,53 @@ class ComputeFilter(filters.BaseHostFilter):
                 LOG.warning("%(host_state)s has not been heard from in a "
                             "while", {'host_state': host_state})
                 return False
+
+        host_ip = host_state.host_ip
+        core_usage = list(filter(lambda x: x['host-ip'] == str(host_ip), CORE_USAGE['core_usage']))
+        core_usage = core_usage[0]
+
+        gcpus_avl = core_usage['green-cores-avl']
+
+        hints = spec_obj.scheduler_hints
+        is_low_lat_type = hints['is_low_latency'][0] if 'is_low_latency' in hints else 'false'
+        scheduler = hints['scheduler'][0]
+
+        if scheduler == 'load_shift':
+            LOG.info("[SMT-POOLING-SCH] Scheduler: %(scheduler)s", {'scheduler': scheduler})
+            if str(host_ip) == '172.23.13.35' and is_low_lat_type == 'true':
+                LOG.info(
+                    "[SMT-POOLING-SCH] Cannot pack low-latency VM in the SMT host when scheduler: %(scheduler)s is used",
+                    {'scheduler': scheduler})
+                return False
+            LOG.info("[SMT-POOLING-SCH] Can pack - scheduler: %(scheduler)s", {'scheduler': scheduler})
+            return True
+
+        LOG.info("[SMT-POOLING-SCH] Scheduler: %(scheduler)s", {'scheduler': scheduler})
+        if is_low_lat_type == 'true':
+            LOG.info("[SMT-POOLING-SCH] type: %(is_low_lat_type)s is low-latency. filtering...",
+                     {'is_low_lat_type': is_low_lat_type})
+            if str(host_ip) == '172.23.13.34':
+                if int(gcpus_avl) == 6:
+                    LOG.info(
+                        "[SMT-POOLING-SCH] host_ip: %(host_ip)s is in non-SMT pool and is at rnw peak. Can place Low-lat VM here!",
+                        {'host_ip': str(host_ip)})
+                    return True
+                else:
+                    LOG.info(
+                        "[SMT-POOLING-SCH] host_ip: %(host_ip)s is in non-SMT pool and is at rnw valley. Cannot place Low-lat VM here!",
+                        {'host_ip': str(host_ip)})
+                    return False
+            else:
+                LOG.info("[SMT-POOLING-SCH] host_ip: %(host_ip)s is in SMT pool. Cannot place Low-lat VM here...",
+                         {'host_ip': str(host_ip)})
+                return False
+        else:
+            if str(host_ip) == '172.23.13.34' and int(gcpus_avl) == 6:
+                LOG.info(
+                    "[SMT-POOLING-SCH] type: %(is_low_lat_type)s is not low-latency. But current host is non-SMT at rnw peak, so avoiding placing best-effort VMs here!",
+                    {'is_low_lat_type': is_low_lat_type})
+                return False
+            LOG.info("[SMT-POOLING-SCH] type: %(is_low_lat_type)s is not low-latency. Will be unfiltered",
+                     {'is_low_lat_type': is_low_lat_type})
+
         return True
